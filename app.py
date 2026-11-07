@@ -29,6 +29,7 @@ from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from starlette.background import BackgroundTask
 from pydantic import BaseModel
 from s3_uploader import upload_job_artifacts, list_all_clips, upload_actor_to_s3, list_actor_gallery, upload_video_to_gallery, list_video_gallery
+import formats
 import recut
 import layout_ranges
 import watermarked
@@ -4837,6 +4838,62 @@ async def get_clip_edl(job_id: str, clip_index: int, request: Request):
     }
 
 
+@app.get("/api/formats")
+async def list_clip_formats():
+    """Ready-made looks (captions, hook, pacing, layout) a clip can start from."""
+    return {"default": formats.DEFAULT_FORMAT, "formats": formats.list_formats()}
+
+
+class ClipProjectRequest(BaseModel):
+    format: str = formats.DEFAULT_FORMAT
+    # Optional user edits on top of the format: {"subtitles": {...}, "hook": {...},
+    # "effects": {...}}. Only whitelisted keys survive (formats.apply_overrides).
+    overrides: Optional[Dict[str, Any]] = None
+
+
+@app.post("/api/clip/{job_id}/{clip_index}/project")
+async def build_clip_project(job_id: str, clip_index: int,
+                             req: ClipProjectRequest, request: Request):
+    """The clip as an editable project (subtitles/hook/effects props for the
+    Remotion preview) for the chosen format. Read-only: nothing is rendered."""
+    await _ensure_job_files(job_id, request)
+    if job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    await _assert_job_owner(request, jobs[job_id])
+
+    output_dir = os.path.join(OUTPUT_DIR, job_id)
+    json_files = glob.glob(os.path.join(output_dir, "*_metadata.json"))
+    if not json_files:
+        raise HTTPException(status_code=404, detail="Metadata not found")
+    with open(json_files[0], 'r') as f:
+        data = json.load(f)
+    clips = data.get('shorts', [])
+    if clip_index < 0 or clip_index >= len(clips):
+        raise HTTPException(status_code=404, detail="Clip not found")
+    clip = clips[clip_index]
+
+    segments, _ = _clip_recipe_parts(clip)
+    duration = recut.total_duration(segments)
+    # Words on the CLIP's own timeline: shift each source word by the time of
+    # the segments before it, and keep only words inside a segment.
+    words, offset = [], 0.0
+    src_words = recut.transcript_words(data.get('transcript') or {})
+    for seg in segments:
+        for w in src_words:
+            if w["s"] >= seg["start"] and w["e"] <= seg["end"] + 0.05:
+                words.append({"w": w["w"],
+                              "s": w["s"] - seg["start"] + offset,
+                              "e": w["e"] - seg["start"] + offset})
+        offset += seg["end"] - seg["start"]
+
+    project = formats.build_project(
+        req.format, words, duration, clip.get('hook_text') or '')
+    if req.overrides:
+        project = formats.apply_overrides(project, req.overrides)
+    return {"job_id": job_id, "clip_index": clip_index,
+            "duration": duration, "project": project}
+
+
 class RerenderSegment(BaseModel):
     start: float
     end: float
@@ -8372,3 +8429,12 @@ async def saasshorts_voices(
         ],
         "source": "defaults",
     }
+
+
+# --- Desktop (no-Docker) build ------------------------------------------------
+# The Windows installer ships the built dashboard and serves it from this same
+# process (the dashboard talks to a relative /api, so no nginx is needed).
+# Mounted LAST so every API route and the /videos, /thumbnails mounts above win.
+_DASHBOARD_DIR = os.environ.get("OPENSHORTS_DASHBOARD_DIR")
+if _DASHBOARD_DIR and os.path.isdir(_DASHBOARD_DIR):
+    app.mount("/", StaticFiles(directory=_DASHBOARD_DIR, html=True), name="dashboard")
