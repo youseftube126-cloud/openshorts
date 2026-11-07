@@ -28,19 +28,22 @@ def _port_open() -> bool:
 def _open_when_ready():
     for _ in range(240):                                # up to ~2 minutes
         if _port_open():
-            webbrowser.open(f"http://{HOST}:{PORT}/")
+            webbrowser.open(f"http://{HOST}:{PORT}/#app")
             return
         time.sleep(0.5)
 
 
 def main():
     if _port_open():                                    # already running
-        webbrowser.open(f"http://{HOST}:{PORT}/")
+        webbrowser.open(f"http://{HOST}:{PORT}/#app")
         return
 
     os.environ["PATH"] = str(INSTALL / "ffmpeg") + os.pathsep + os.environ.get("PATH", "")
     os.environ["OPENSHORTS_DASHBOARD_DIR"] = str(ROOT / "dashboard" / "dist")
     os.environ.setdefault("PYTHONUTF8", "1")
+    # Jobs are started as [sys.executable, "main.py"]. pythonw.exe has no stdout
+    # to pipe back, so jobs must use the console python.exe next to it.
+    sys.executable = str(INSTALL / "python" / "python.exe")
     os.chdir(ROOT)                                      # app.py uses relative output/ and uploads/
     sys.path.insert(0, str(ROOT))
 

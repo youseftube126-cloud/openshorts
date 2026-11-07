@@ -3073,6 +3073,15 @@ def _lower_priority():
         os.nice(n)
 
 
+# POSIX: lower the job's priority in the child before exec. Windows has neither
+# preexec_fn nor os.nice (Popen raises "preexec_fn is not supported on Windows
+# platforms"), so there the job just runs without a console window instead.
+if os.name == "nt":
+    _JOB_POPEN_EXTRA = {"creationflags": subprocess.CREATE_NO_WINDOW}
+else:
+    _JOB_POPEN_EXTRA = {"preexec_fn": _lower_priority}
+
+
 def _job_encode_env(env):
     """Job env plus the NVENC encode cap that bin/ffmpeg enforces.
 
@@ -3121,7 +3130,7 @@ async def run_job(job_id, job_data):
             stderr=subprocess.STDOUT, # Merge stderr to stdout
             env=env,
             cwd=os.getcwd(),
-            preexec_fn=_lower_priority,
+            **_JOB_POPEN_EXTRA,
         )
         
         # We need to capture logs in a thread because Popen isn't async
