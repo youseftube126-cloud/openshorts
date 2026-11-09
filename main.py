@@ -862,6 +862,85 @@ def _content_block(error_text):
     return None
 
 
+def smart_download_source(url, output_dir, viewer_clips=None):
+    """Audio first, then only the stretches of video that become clips.
+
+    Returns ``(compact_video_path, title, early)`` where ``early`` carries the
+    transcript and clips already remapped onto the compact file (the same
+    handover the early-audio path uses, so nothing after the download changes).
+    Raises when it cannot help (live stream, too little speech, most of the
+    video wanted anyway); the caller then downloads the whole video as usual.
+    """
+    import ssrf_guard
+    import smart_download as sd
+    import file_hosts
+    from security_utils import assert_public_url
+    from yt_clients import NotASingleVideo, youtube_non_video_reason, fallback_extractor_args
+
+    assert_public_url(url)
+    url = file_hosts.resolve(url)
+    reason = youtube_non_video_reason(url)
+    if reason:
+        raise NotASingleVideo(f"This link is {reason}.")
+
+    ex_args = fallback_extractor_args(os.environ.get("BGUTIL_BASE_URL", "").strip(),
+                                      os.environ.get("BGUTIL_SCRIPT_PATH", "").strip())
+    max_h = int(os.environ.get("SMART_MAX_HEIGHT", "1080") or 1080)
+    fmt = (f"bestvideo[vcodec^=avc1][height<={max_h}][ext=mp4]+bestaudio[ext=m4a]/"
+           f"bestvideo[vcodec^=avc1][height<={max_h}]+bestaudio/"
+           f"best[height<={max_h}][ext=mp4]/best[ext=mp4]/best")
+    pad = float(os.environ.get("SMART_PAD_SECONDS", sd.DEFAULT_PAD))
+
+    print("📥 Smart download: fetching the audio track first...")
+    with ssrf_guard.guarded():
+        audio_path, duration, title = sd.fetch_audio(url, output_dir, ex_args)
+    if not duration:
+        raise RuntimeError("unknown video length")
+    duration = float(duration)
+
+    try:
+        transcript = transcribe_video(audio_path)
+    finally:
+        try:
+            os.remove(audio_path)
+        except OSError:
+            pass
+    if speech_is_sparse(transcript, duration):
+        raise RuntimeError("too little speech to pick clips from the transcript")
+    clips = get_viral_clips(transcript, duration, viewer_clips=viewer_clips)
+    if not clips or not clips.get("shorts"):
+        raise RuntimeError("no clips were picked")
+
+    ranges = sd.plan_ranges(clips["shorts"], duration, pad=pad)
+    if not sd.is_worth_it(ranges, duration):
+        raise RuntimeError("the picked clips cover most of the video, downloading it whole")
+    print(f"✂️ Downloading {sd.total_seconds(ranges) / 60:.1f} of {duration / 60:.1f} min "
+          f"({100 * sd.total_seconds(ranges) / duration:.0f}% of the video).")
+
+    paths = sd.fetch_sections(url, ranges, output_dir, ex_args, fmt,
+                              workers=int(os.environ.get("SMART_WORKERS", "2") or 2),
+                              guard=ssrf_guard.guarded)
+    sanitized = sanitize_filename(title)
+    compact = os.path.join(output_dir, f"{sanitized}.mp4")
+    durations = sd.concat_sections(paths, compact)
+    for p in paths:
+        try:
+            os.remove(p)
+        except OSError:
+            pass
+    placements = sd.place(ranges, durations)
+    sd.write_map(os.path.join(output_dir, "smart_source_map.json"), ranges, placements, duration)
+
+    new_clips = sd.remap_clips(clips, placements)
+    if len(new_clips["shorts"]) < len(clips["shorts"]):
+        print(f"⚠️ {len(clips['shorts']) - len(new_clips['shorts'])} clip(s) fell outside "
+              f"the downloaded parts and were dropped.")
+    if not new_clips["shorts"]:
+        raise RuntimeError("no clip fits inside the downloaded parts")
+    new_transcript = sd.remap_transcript(transcript, placements)
+    return compact, sanitized, {"transcript": new_transcript, "clips": new_clips}
+
+
 def download_youtube_video(url, output_dir=".", on_audio=None, allow_paid=True,
                            cap_minutes=None, route_out=None):
     """Download ``url`` with only public addresses resolvable (ssrf_guard): the
@@ -2588,8 +2667,31 @@ if __name__ == '__main__':
                      and os.environ.get("EARLY_AUDIO", "1").strip() != "0"
                      and not os.environ.get("MAX_SOURCE_MINUTES", "").strip()
                      and not os.path.exists(os.path.join(output_dir, TRANSCRIPT_CHECKPOINT)))
-        input_video, video_title = download_youtube_video(
-            args.url, output_dir, on_audio=_on_audio if use_early else None)
+        smart = None
+        if (not args.skip_analysis and not args.transcript
+                and os.environ.get("OPENSHORTS_SMART_DOWNLOAD", "").strip() == "1"
+                and is_youtube_url(args.url)
+                and not os.environ.get("MAX_SOURCE_MINUTES", "").strip()
+                and not os.environ.get("SOURCE_CAP_MINUTES", "").strip()
+                and not os.path.exists(os.path.join(output_dir, TRANSCRIPT_CHECKPOINT))):
+            from yt_clients import NotASingleVideo
+            try:
+                smart = smart_download_source(args.url, output_dir, viewer_clips)
+            except (gemini_worker.GeminiBlockedError, NotASingleVideo):
+                raise
+            except Exception as e:
+                # Any trouble: fall back to the ordinary full download.
+                print(f"ℹ️ Smart download not used ({type(e).__name__}: {e}); "
+                      f"downloading the whole video instead.")
+        if smart:
+            input_video, video_title, _handover = smart
+            with early["lock"]:
+                early.update(started=True, transcript=_handover["transcript"],
+                             clips=_handover["clips"])
+            early["done"].set()
+        else:
+            input_video, video_title = download_youtube_video(
+                args.url, output_dir, on_audio=_on_audio if use_early else None)
     else:
         input_video = args.input
         video_title = os.path.splitext(os.path.basename(input_video))[0]

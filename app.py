@@ -29,6 +29,7 @@ from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from starlette.background import BackgroundTask
 from pydantic import BaseModel
 from s3_uploader import upload_job_artifacts, list_all_clips, upload_actor_to_s3, list_actor_gallery, upload_video_to_gallery, list_video_gallery
+import campaigns
 import formats
 import recut
 import layout_ranges
@@ -4845,6 +4846,32 @@ async def get_clip_edl(job_id: str, clip_index: int, request: Request):
         },
         "rerender_minutes": _cloud_config.EDITOR_ACTION_MINUTES if BILLING_ENABLED else 0,
     }
+
+
+# --- Campaigns (self-host only): per-campaign videos, analytics screenshots, rules
+# and an AI coach. Data lives in OPENSHORTS_DATA_DIR (the desktop installer points
+# it outside the app folder so it survives updates).
+_SAFE_JOB_ID = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def _campaign_clips(job_id: str):
+    """The clips (metadata dicts) of a finished job, or [] if it has none."""
+    if not _SAFE_JOB_ID.match(job_id or ""):
+        return []
+    files = glob.glob(os.path.join(OUTPUT_DIR, job_id, "*_metadata.json"))
+    if not files:
+        return []
+    try:
+        with open(files[0], "r", encoding="utf-8") as f:
+            return json.load(f).get("shorts", []) or []
+    except (OSError, ValueError):
+        return []
+
+
+if not BILLING_ENABLED:
+    app.include_router(campaigns.create_router(
+        campaigns.Store(os.environ.get("OPENSHORTS_DATA_DIR", "data")),
+        _campaign_clips, resolve_gemini))
 
 
 @app.get("/api/formats")

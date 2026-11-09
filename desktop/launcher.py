@@ -41,6 +41,13 @@ def main():
     os.environ["PATH"] = str(INSTALL / "ffmpeg") + os.pathsep + os.environ.get("PATH", "")
     os.environ["OPENSHORTS_DASHBOARD_DIR"] = str(ROOT / "dashboard" / "dist")
     os.environ.setdefault("PYTHONUTF8", "1")
+    # Metered connection: audio first, then only the parts of the video that
+    # become clips (see smart_download.py). Set OPENSHORTS_SMART_DOWNLOAD=0 in
+    # the environment to download whole videos as before.
+    os.environ.setdefault("OPENSHORTS_SMART_DOWNLOAD", "1")
+    # Campaigns (videos, analytics screenshots, chat) live outside app\ so an
+    # update of the program never touches them.
+    os.environ.setdefault("OPENSHORTS_DATA_DIR", str(INSTALL / "data"))
     # Jobs are started as [sys.executable, "main.py"]. pythonw.exe has no stdout
     # to pipe back, so jobs must use the console python.exe next to it.
     sys.executable = str(INSTALL / "python" / "python.exe")

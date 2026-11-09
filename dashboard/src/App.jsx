@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Upload, Sparkles, Youtube, Instagram, Share2, ChevronDown, Check, Activity, LayoutDashboard, Settings, Plus, History, X, Terminal, Shield, LayoutGrid, Image, Globe, RotateCcw, Calendar, AlertTriangle, KeyRound, Bot, Users, Smartphone, ExternalLink, Copy, CheckCircle2, Mail, Loader2, Download, Menu, Lock, Rocket } from 'lucide-react';
+import { Upload, Sparkles, Youtube, Instagram, Share2, ChevronDown, Check, Activity, LayoutDashboard, Settings, Plus, History, X, Terminal, Shield, LayoutGrid, Image, Globe, RotateCcw, Calendar, AlertTriangle, KeyRound, Bot, Users, Smartphone, ExternalLink, Copy, CheckCircle2, Mail, Loader2, Download, Menu, Lock, Rocket, Megaphone } from 'lucide-react';
 import KeyInput from './components/KeyInput';
 import MediaInput from './components/MediaInput';
 import McpConnectCard from './components/McpConnectCard';
@@ -9,6 +9,7 @@ import ProcessingAnimation from './components/ProcessingAnimation';
 import ThumbnailStudio from './components/ThumbnailStudio';
 import SaaShortsTab from './components/SaaShortsTab';
 import UGCGallery from './components/UGCGallery';
+import CampaignsTab from './components/CampaignsTab';
 import ScheduleWeekModal from './components/ScheduleWeekModal';
 import ClipEditor from './components/ClipEditor';
 import ReframeEditor from './components/ReframeEditor';
@@ -29,6 +30,10 @@ import AutopilotTab from './components/AutopilotTab';
 import ProfileMenu from './components/ProfileMenu';
 import Modal from './components/ui/Modal';
 import { useAuth } from './contexts/AuthContext';
+
+// Lean mode: for now only the Clip Generator (plus Campaigns and Settings) is shown.
+// The other tabs are hidden, not removed: delete an id from this set to bring it back.
+const HIDDEN_TABS = new Set(['autopilot', 'saasshorts', 'ai-agent', 'ugc-gallery', 'thumbnails', 'history']);
 import { apiFetch, apiJson, QuotaError, QUOTA_WALL_EVENT } from './lib/api';
 import { track } from './lib/analytics';
 
@@ -293,6 +298,14 @@ function App() {
   const [durableClips, setDurableClips] = useState({});
 
   const [apiKey, setApiKey] = useState(localStorage.getItem('gemini_key') || '');
+  // The campaign new clips are added to (set from the Campaigns tab).
+  const [activeCampaignId, setActiveCampaignIdRaw] = useState(localStorage.getItem('active_campaign') || '');
+  const setActiveCampaignId = (id) => {
+    setActiveCampaignIdRaw(id);
+    if (id) localStorage.setItem('active_campaign', id); else localStorage.removeItem('active_campaign');
+  };
+  const [activeCampaignName, setActiveCampaignName] = useState('');
+  const [campaignNotice, setCampaignNotice] = useState('');
   // Social API State - Load encrypted or plain
   const [uploadPostKey, setUploadPostKey] = useState(() => {
     const stored = localStorage.getItem('uploadPostKey_v3');
@@ -414,6 +427,43 @@ function App() {
   // Read by in-flight async chases to notice that the user moved on to another job.
   const jobIdRef = useRef(jobId);
   useEffect(() => { jobIdRef.current = jobId; }, [jobId]);
+
+  // Name of the active campaign (for the header chip). Cleared if it was deleted.
+  useEffect(() => {
+    if (!activeCampaignId) { setActiveCampaignName(''); return; }
+    let cancelled = false;
+    apiFetch(`/api/campaigns/${activeCampaignId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((c) => {
+        if (cancelled) return;
+        if (c) setActiveCampaignName(c.name); else setActiveCampaignId('');
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [activeCampaignId]);
+
+  // A finished job adds all its clips to the active campaign (once per job; the
+  // server also skips clips that are already linked).
+  const importedJobsRef = useRef(new Set());
+  useEffect(() => {
+    if (status !== 'complete' || !jobId || !activeCampaignId) return;
+    const key = `${activeCampaignId}:${jobId}`;
+    if (importedJobsRef.current.has(key)) return;
+    importedJobsRef.current.add(key);
+    apiFetch(`/api/campaigns/${activeCampaignId}/import-job`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ job_id: jobId }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d && d.added > 0) {
+          setCampaignNotice(`${d.added} clip${d.added === 1 ? '' : 's'} added to the campaign`);
+          setTimeout(() => setCampaignNotice(''), 6000);
+        }
+      })
+      .catch(() => {});
+  }, [status, jobId, activeCampaignId]);
 
   const flushClipState = () => {
     const s = clipStateSync.current;
@@ -1286,7 +1336,7 @@ function App() {
   // One nav definition drives all three surfaces: the desktop rail, the mobile
   // drawer, and the bottom tab bar. `short` is the tab-bar label — the full one
   // wraps to two lines in a 5-up bar on a 360px phone.
-  const navItems = [
+  const allNavItems = [
     { id: 'dashboard', ord: '01', icon: LayoutDashboard, label: 'Clip Generator', short: 'clips', primary: true },
     // Cloud only: it runs on the managed pipeline and the Upload-Post connection.
     ...(billingEnabled ? [{ id: 'autopilot', ord: '02', icon: Rocket, label: 'Autopilot', short: 'autopilot', isNew: true }] : []),
@@ -1295,8 +1345,13 @@ function App() {
     { id: 'ugc-gallery', ord: '05', icon: LayoutGrid, label: 'UGC Gallery', short: 'gallery', primary: true },
     { id: 'thumbnails', ord: '06', icon: Image, label: 'YouTube Studio', short: 'studio', primary: true },
     ...(billingEnabled && isSignedIn ? [{ id: 'history', ord: '07', icon: History, label: 'History', short: 'history' }] : []),
+    ...(!billingEnabled ? [{ id: 'campaigns', ord: '02', icon: Megaphone, label: 'Campaigns', short: 'campaigns', primary: true }] : []),
     { id: 'settings', ord: '08', icon: Settings, label: 'Settings', short: 'settings' },
   ];
+  // Lean mode: hide the tabs listed in HIDDEN_TABS and renumber the rest.
+  const navItems = allNavItems
+    .filter((n) => !HIDDEN_TABS.has(n.id))
+    .map((n, i) => ({ ...n, ord: String(i + 1).padStart(2, '0') }));
   const activeNav = navItems.find((n) => n.id === activeTab);
 
   // Escape closes the mobile drawer. The shell itself is overflow-hidden, so
@@ -1536,6 +1591,16 @@ function App() {
               >
                 <Plus size={14} />
                 <span className="hidden sm:inline">New Project</span>
+              </button>
+            )}
+            {activeCampaignName && (
+              <button
+                onClick={() => goToTab('campaigns')}
+                className="btn-quiet px-3 py-1.5 text-xs shrink-0 text-brass"
+                title="New clips are added to this campaign"
+              >
+                <Megaphone size={13} />
+                <span className="hidden sm:inline truncate max-w-[160px]">{campaignNotice || activeCampaignName}</span>
               </button>
             )}
           </div>
@@ -2008,6 +2073,13 @@ function App() {
               <div className="max-w-6xl mx-auto p-4 sm:p-6 md:p-8">
                 <UGCGallery />
               </div>
+            </div>
+          )}
+
+          {/* View: Campaigns */}
+          {activeTab === 'campaigns' && (
+            <div className="h-full overflow-y-auto custom-scrollbar animate-fade">
+              <CampaignsTab apiKey={apiKey} activeId={activeCampaignId} setActiveId={setActiveCampaignId} />
             </div>
           )}
 
