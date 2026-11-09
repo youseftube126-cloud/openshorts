@@ -58,14 +58,25 @@ jobs:
           Invoke-WebRequest https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip -OutFile ffmpeg.zip
           Expand-Archive ffmpeg.zip ffmpeg-tmp
           New-Item -ItemType Directory -Force dist\OpenShorts\ffmpeg | Out-Null
-          Copy-Item ffmpeg-tmp\*\bin\*.exe dist\OpenShorts\ffmpeg\
+          # ffmpeg + ffprobe only: ffplay (a video player) is a third of the size and never used.
+          Copy-Item ffmpeg-tmp\*\bin\ffmpeg.exe, ffmpeg-tmp\*\bin\ffprobe.exe dist\OpenShorts\ffmpeg\
+
+      - name: Trim files the app never loads
+        shell: pwsh
+        run: |
+          $sp = "dist\OpenShorts\python\Lib\site-packages"
+          # C++ headers and linker stubs: only needed to compile against torch.
+          Remove-Item -Recurse -Force "$sp\torch\include" -ErrorAction SilentlyContinue
+          Get-ChildItem "$sp\torch\lib" -Filter *.lib -ErrorAction SilentlyContinue | Remove-Item -Force
 
       - name: Smoke test (backend imports and starts)
         shell: pwsh
         run: |
           $env:PATH = "$PWD\dist\OpenShorts\ffmpeg;$env:PATH"
           Set-Location dist\OpenShorts\app
-          & ..\python\python.exe -c "import app; print('app imported OK')"
+          & ..\python\python.exe -c "import app; import torch, cv2; print('app imported OK')"
+          # compiled caches the smoke test just wrote: Python rebuilds them on first run
+          Get-ChildItem .. -Recurse -Directory -Filter __pycache__ | Remove-Item -Recurse -Force
 
       - name: Build installer
         shell: pwsh

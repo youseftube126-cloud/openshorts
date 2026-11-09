@@ -14,8 +14,10 @@ DefaultDirName={localappdata}\OpenShorts
 DefaultGroupName={#AppName}
 OutputDir=..\installer
 OutputBaseFilename=OpenShorts-Studio-Setup
-Compression=lzma2/fast
-SolidCompression=no
+; ultra + solid shrinks the installer ~15% vs lzma2/fast; the build just takes a few minutes longer.
+Compression=lzma2/ultra64
+SolidCompression=yes
+LZMAUseSeparateProcess=yes
 DiskSpanning=no
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
