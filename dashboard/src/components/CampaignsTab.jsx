@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Plus, ArrowLeft, Trash2, Loader2, ImagePlus, Send, Star, Link2, MessageSquare,
-  ListVideo, ScrollText, Sparkles, X,
+  ListVideo, ScrollText, Sparkles, X, Megaphone,
 } from 'lucide-react';
 import { apiFetch, apiJson } from '../lib/api';
 import { getApiUrl } from '../config';
@@ -105,21 +105,22 @@ function VideoCard({ campaignId, video, onChanged, onDeleted }) {
 
       <div className="flex-1 min-w-0 space-y-2">
         <div className="flex items-start gap-2">
-          <input dir="auto" className={`${field} font-medium`} value={form.title} placeholder="title"
+          <input dir="auto" className={`${field} font-medium`} value={form.title} placeholder="Title"
             onChange={(e) => setForm({ ...form, title: e.target.value })} onBlur={() => save('title')} />
-          {video.score != null && (
-            <span className="text-micro font-mono uppercase text-brass shrink-0 pt-2" title="virality score">{video.score}</span>
-          )}
+          <div className="flex items-center gap-1.5 shrink-0 pt-1.5">
+            {video.score != null && <span className="badge-brass" title="Virality score">Score {video.score}</span>}
+            {video.posted_url ? <span className="badge-ok">Posted</span> : <span className="badge-warn">Draft</span>}
+          </div>
           <button onClick={remove} className="p-2 text-muted hover:text-ink shrink-0" aria-label="remove video"><Trash2 size={15} /></button>
         </div>
-        <input dir="auto" className={field} value={form.hook} placeholder="hook (first line of the video)"
+        <input dir="auto" className={field} value={form.hook} placeholder="Hook (first line of the video)"
           onChange={(e) => setForm({ ...form, hook: e.target.value })} onBlur={() => save('hook')} />
         <div className="flex items-center gap-2">
           <Link2 size={14} className="text-muted shrink-0" />
-          <input className={field} value={form.posted_url} placeholder="posted link (YouTube / TikTok / ...) — fill it when you post"
+          <input className={field} value={form.posted_url} placeholder="Posted link (YouTube, TikTok...) — fill it in when you post"
             onChange={(e) => setForm({ ...form, posted_url: e.target.value })} onBlur={() => save('posted_url')} />
         </div>
-        <textarea dir="auto" rows={2} className={field} value={form.notes} placeholder="your notes (what you changed, what you noticed)"
+        <textarea dir="auto" rows={2} className={field} value={form.notes} placeholder="Your notes (what you changed, what you noticed)"
           onChange={(e) => setForm({ ...form, notes: e.target.value })} onBlur={() => save('notes')} />
 
         <div>
@@ -139,12 +140,12 @@ function VideoCard({ campaignId, video, onChanged, onDeleted }) {
             <button onClick={() => fileRef.current?.click()} disabled={uploading}
               className="btn-quiet px-3 py-1.5 text-xs">
               {uploading ? <Loader2 size={13} className="animate-spin" /> : <ImagePlus size={13} />}
-              analytics screenshot
+              Analytics screenshot
             </button>
             <input ref={fileRef} type="file" accept="image/*" multiple className="hidden"
               onChange={(e) => { upload(e.target.files); e.target.value = ''; }} />
           </div>
-          <p className="text-micro text-muted mt-1.5">tip: click the card and press Ctrl+V to paste a screenshot</p>
+          <p className="text-micro text-muted mt-1.5">Tip: click the card and press Ctrl+V to paste a screenshot</p>
         </div>
         {error && <p className="text-xs text-red-400">{error}</p>}
       </div>
@@ -173,23 +174,23 @@ function VideosPane({ campaign, reload, setCampaign }) {
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <button onClick={() => setPostedOnly(false)} className={`btn-quiet px-3 py-1.5 text-xs ${!postedOnly ? 'text-ink' : ''}`}>
-          all ({campaign.videos.length})
+          All ({campaign.videos.length})
         </button>
         <button onClick={() => setPostedOnly(true)} className={`btn-quiet px-3 py-1.5 text-xs ${postedOnly ? 'text-ink' : ''}`}>
-          posted ({campaign.videos.filter((v) => v.posted_url).length})
+          Posted ({campaign.videos.filter((v) => v.posted_url).length})
         </button>
         <button onClick={() => setAdding(!adding)} className="btn-quiet px-3 py-1.5 text-xs ml-auto">
-          <Plus size={13} /> add a video by hand
+          <Plus size={13} /> Add a video by hand
         </button>
       </div>
 
       {adding && (
         <div className="card p-3 flex flex-col sm:flex-row gap-2">
-          <input dir="auto" className="input-field text-sm flex-1" placeholder="title" value={draft.title}
+          <input dir="auto" className="input-field text-sm flex-1" placeholder="Title" value={draft.title}
             onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
-          <input className="input-field text-sm flex-1" placeholder="posted link (optional)" value={draft.posted_url}
+          <input className="input-field text-sm flex-1" placeholder="Posted link (optional)" value={draft.posted_url}
             onChange={(e) => setDraft({ ...draft, posted_url: e.target.value })} />
-          <button onClick={addManual} className="btn-primary px-4 py-2 text-sm">add</button>
+          <button onClick={addManual} className="btn-primary px-4 py-2 text-sm">Add</button>
         </div>
       )}
       {error && <p className="text-xs text-red-400">{error}</p>}
@@ -224,8 +225,8 @@ function RulesPane({ campaign, onSaved }) {
       <textarea dir="auto" rows={14} className="input-field w-full text-sm" value={rules} onChange={(e) => setRules(e.target.value)}
         placeholder="e.g. Videos must be 30-60 seconds. No copyrighted music. Tag @brand. Pay: $1 per 1000 views..." />
       <div className="flex items-center gap-3">
-        <button onClick={save} className="btn-primary px-5 py-2 text-sm">save rules</button>
-        {state === 'saved' && <span className="text-xs text-muted">saved</span>}
+        <button onClick={save} className="btn-primary px-5 py-2 text-sm">Save rules</button>
+        {state === 'saved' && <span className="text-xs text-ok">Saved</span>}
         {state && state !== 'saved' && state !== 'saving' && <span className="text-xs text-red-400">{state}</span>}
       </div>
     </div>
@@ -243,7 +244,7 @@ function ChatPane({ campaign, apiKey }) {
   const endRef = useRef(null);
 
   useEffect(() => {
-    apiJson(`/api/campaigns/${campaign.id}/chat`).then((d) => setMessages(d.messages)).catch((e) => setError(errText(e)));
+    apiJson(`/api/campaigns/${campaign.id}/chat`).then((d) => setMessages(d.messages || [])).catch((e) => setError(errText(e)));
   }, [campaign.id]);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, sending]);
 
@@ -277,16 +278,16 @@ function ChatPane({ campaign, apiKey }) {
           {' '}and {shots} analytics screenshot{shots === 1 ? '' : 's'} (the newest 12).
         </p>
         <button onClick={() => send(REVIEW_PROMPT)} disabled={sending} className="btn-primary px-4 py-1.5 text-xs">
-          <Sparkles size={13} /> review campaign
+          <Sparkles size={13} /> Review campaign
         </button>
-        {messages?.length > 0 && <button onClick={clear} className="btn-quiet px-3 py-1.5 text-xs">clear</button>}
+        {messages?.length > 0 && <button onClick={clear} className="btn-quiet px-3 py-1.5 text-xs">Clear</button>}
       </div>
 
       <div className="flex-1 overflow-y-auto py-4 space-y-4">
         {messages === null && <Loader2 className="animate-spin text-muted mx-auto" />}
         {messages?.length === 0 && (
           <p className="text-sm text-muted text-center py-10">
-            Add the rules, your videos and their analytics screenshots, then press “review campaign” or ask anything.
+            Add the rules, your videos and their analytics screenshots, then press “Review campaign” or ask anything.
           </p>
         )}
         {messages?.map((m, i) => (
@@ -302,7 +303,7 @@ function ChatPane({ campaign, apiKey }) {
 
       {error && <p className="text-xs text-red-400 pb-2">{error}</p>}
       <div className="flex gap-2 items-end pt-3 border-t border-rule">
-        <textarea dir="auto" rows={2} className="input-field flex-1 text-sm" value={text} placeholder="ask about a video, the rules, what to fix..."
+        <textarea dir="auto" rows={2} className="input-field flex-1 text-sm" value={text} placeholder="Ask about a video, the rules, what to fix..."
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} />
         <button onClick={() => send()} disabled={sending || !text.trim()} className="btn-primary px-4 py-2" aria-label="send"><Send size={15} /></button>
@@ -327,25 +328,30 @@ function CampaignPage({ id, apiKey, activeId, setActiveId, onBack }) {
   if (!campaign) return <div className="p-10 flex justify-center"><Loader2 className="animate-spin text-muted" /></div>;
 
   const isActive = activeId === campaign.id;
-  const tabs = [['videos', ListVideo, 'videos'], ['rules', ScrollText, 'rules'], ['chat', MessageSquare, 'AI coach']];
+  const tabs = [['videos', ListVideo, 'Videos'], ['rules', ScrollText, 'Rules'], ['chat', MessageSquare, 'AI coach']];
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <button onClick={onBack} className="btn-quiet px-3 py-1.5 text-xs"><ArrowLeft size={13} /> campaigns</button>
-        <h1 dir="auto" className="font-display text-xl text-ink flex-1 min-w-0 truncate">{campaign.name}</h1>
+        <button onClick={onBack} className="btn-quiet px-3 py-1.5 text-xs"><ArrowLeft size={13} /> Campaigns</button>
+        <div className="flex-1 min-w-0">
+          <h1 dir="auto" className="font-display text-2xl text-ink truncate">{campaign.name}</h1>
+          <p className="text-xs text-muted mt-0.5">
+            {campaign.videos.length} video{campaign.videos.length === 1 ? '' : 's'} · {campaign.videos.filter((v) => v.posted_url).length} posted
+          </p>
+        </div>
         <button onClick={() => setActiveId(isActive ? '' : campaign.id)}
           className={`btn-quiet px-3 py-1.5 text-xs ${isActive ? 'text-brass' : ''}`}
           title="New clips from the Clip Generator are added to the active campaign">
           <Star size={13} fill={isActive ? 'currentColor' : 'none'} />
-          {isActive ? 'active in clip generator' : 'use in clip generator'}
+          {isActive ? 'Active in Clip Generator' : 'Use in Clip Generator'}
         </button>
       </div>
 
-      <div className="flex gap-2 border-b border-rule">
+      <div className="inline-flex gap-1 p-1 rounded-input bg-paper2 border border-rule">
         {tabs.map(([key, Icon, label]) => (
           <button key={key} onClick={() => setTab(key)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-sm lowercase border-b-2 -mb-px ${tab === key ? 'border-brass text-ink' : 'border-transparent text-muted hover:text-ink2'}`}>
-            <Icon size={14} /> {label}
+            className={`flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium rounded-lg transition-colors ${tab === key ? 'row-active text-ink' : 'text-muted hover:text-ink2'}`}>
+            <Icon size={14} className={tab === key ? 'text-brass' : ''} /> {label}
           </button>
         ))}
       </div>
@@ -389,7 +395,7 @@ export default function CampaignsTab({ apiKey, activeId, setActiveId }) {
 
   if (openId) {
     return (
-      <div className="max-w-4xl mx-auto w-full p-4 sm:p-6">
+      <div className="max-w-5xl mx-auto w-full p-4 sm:p-8">
         <CampaignPage id={openId} apiKey={apiKey} activeId={activeId} setActiveId={setActiveId}
           onBack={() => { setOpenId(null); load(); }} />
       </div>
@@ -397,40 +403,72 @@ export default function CampaignsTab({ apiKey, activeId, setActiveId }) {
   }
 
   return (
-    <div className="max-w-4xl mx-auto w-full p-4 sm:p-6 space-y-4">
-      <div className="flex items-center gap-3">
-        <h1 className="font-display lowercase text-2xl text-ink flex-1">campaigns</h1>
-        <button onClick={() => setCreating(!creating)} className="btn-primary px-4 py-2 text-sm"><Plus size={14} /> new campaign</button>
+    <div className="max-w-5xl mx-auto w-full p-4 sm:p-8 space-y-6">
+      <div className="flex flex-wrap items-end gap-4">
+        <div className="flex-1 min-w-0">
+          <p className="eyebrow mb-2">Workspace</p>
+          <h1 className="font-display text-3xl text-ink">Campaigns</h1>
+          <p className="text-sm text-muted mt-1.5 max-w-xl">
+            One space per campaign: its rules, the clips you made, their analytics and an AI coach that tells you what to fix.
+          </p>
+        </div>
+        <button onClick={() => setCreating(!creating)} className="btn-primary px-5 py-2.5 text-sm"><Plus size={15} /> New campaign</button>
       </div>
 
       {creating && (
-        <div className="card p-4 space-y-3">
-          <input dir="auto" className="input-field w-full" placeholder="campaign name" value={draft.name}
+        <div className="card p-5 space-y-3">
+          <input dir="auto" className="input-field w-full" placeholder="Campaign name" value={draft.name} autoFocus
             onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-          <textarea dir="auto" rows={6} className="input-field w-full text-sm" placeholder="rules (you can paste them now or later)"
+          <textarea dir="auto" rows={6} className="input-field w-full text-sm" placeholder="Rules (you can paste them now or later)"
             value={draft.rules} onChange={(e) => setDraft({ ...draft, rules: e.target.value })} />
-          <button onClick={create} disabled={!draft.name.trim()} className="btn-primary px-5 py-2 text-sm">create</button>
+          <div className="flex gap-2">
+            <button onClick={create} disabled={!draft.name.trim()} className="btn-primary px-5 py-2 text-sm">Create campaign</button>
+            <button onClick={() => setCreating(false)} className="btn-ghost px-4 py-2 text-sm">Cancel</button>
+          </div>
         </div>
       )}
       {error && <p className="text-xs text-red-400">{error}</p>}
 
       {campaigns === null ? <Loader2 className="animate-spin text-muted mx-auto" /> : campaigns.length === 0 ? (
-        <div className="card p-10 text-center text-muted text-sm">
-          No campaigns yet. Create one per brand/campaign: it keeps the rules, the clips you made for it,
-          their analytics and an AI coach in one place.
+        <div className="card p-12 text-center">
+          <div className="mx-auto w-12 h-12 rounded-card bg-paper3 flex items-center justify-center text-brass mb-4"><Megaphone size={22} /></div>
+          <p className="text-ink font-medium">No campaigns yet</p>
+          <p className="text-sm text-muted mt-1 max-w-md mx-auto">
+            Create one per brand or campaign. Everything you clip for it lands here with its analytics.
+          </p>
+          <button onClick={() => setCreating(true)} className="btn-primary px-5 py-2.5 text-sm mt-5"><Plus size={15} /> Create your first campaign</button>
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {campaigns.map((c) => (
-            <div key={c.id} className="card card-hover p-4 cursor-pointer" onClick={() => setOpenId(c.id)}>
-              <div className="flex items-start gap-2">
-                <p dir="auto" className="text-ink font-medium flex-1 min-w-0 truncate">{c.name}</p>
-                {activeId === c.id && <Star size={14} className="text-brass shrink-0 mt-0.5" fill="currentColor" title="active in clip generator" />}
-                <button onClick={(e) => { e.stopPropagation(); remove(c); }} className="text-muted hover:text-ink" aria-label="delete campaign"><Trash2 size={14} /></button>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {campaigns.map((c) => {
+            const pct = c.video_count ? Math.round((100 * c.posted_count) / c.video_count) : 0;
+            return (
+              <div key={c.id} className="card card-hover group p-5 cursor-pointer" onClick={() => setOpenId(c.id)}>
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-input bg-paper3 flex items-center justify-center text-brass shrink-0"><Megaphone size={16} /></div>
+                  <div className="flex-1 min-w-0">
+                    <p dir="auto" className="text-ink font-semibold truncate">{c.name}</p>
+                    {activeId === c.id
+                      ? <span className="badge-brass mt-1"><Star size={10} fill="currentColor" /> Active</span>
+                      : <span className="text-xs text-muted">Not active</span>}
+                  </div>
+                  <button onClick={(e) => { e.stopPropagation(); remove(c); }}
+                    className="p-1.5 text-muted hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Delete campaign"><Trash2 size={14} /></button>
+                </div>
+                <div className="grid grid-cols-3 gap-2 mt-5">
+                  {[['Videos', c.video_count], ['Posted', c.posted_count], ['To post', c.video_count - c.posted_count]].map(([k, v]) => (
+                    <div key={k}>
+                      <p className="text-lg font-semibold text-ink leading-none">{v}</p>
+                      <p className="text-[11px] text-muted mt-1">{k}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="h-1.5 rounded-full bg-paper3 mt-4 overflow-hidden">
+                  <div className="h-full rounded-full" style={{ width: `${pct}%`, background: 'linear-gradient(90deg, var(--color-accent), var(--color-accent-2))' }} />
+                </div>
               </div>
-              <p className="text-xs text-muted mt-2">{c.video_count} video{c.video_count === 1 ? '' : 's'} · {c.posted_count} posted</p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

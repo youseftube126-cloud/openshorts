@@ -1,4 +1,4 @@
-name: Build Windows installer
+name: Build Windows installer (Vexxo Clip)
 
 on:
   workflow_dispatch:      # run it by hand from the Actions tab
@@ -24,17 +24,17 @@ jobs:
       - name: Stage app files
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force dist\OpenShorts\app | Out-Null
-          robocopy . dist\OpenShorts\app /E /XD .git .github node_modules dist installer output uploads tests screenshots osrender render-service __pycache__ /XF *.mp4 *.gif /NFL /NDL /NJH /NJS | Out-Null
+          New-Item -ItemType Directory -Force dist\VexxoClip\app | Out-Null
+          robocopy . dist\VexxoClip\app /E /XD .git .github node_modules dist installer output uploads tests screenshots osrender render-service __pycache__ /XF *.mp4 *.gif /NFL /NDL /NJH /NJS | Out-Null
           # the dashboard build output lives in dashboard\dist: copy it back (robocopy skipped every "dist")
-          New-Item -ItemType Directory -Force dist\OpenShorts\app\dashboard\dist | Out-Null
-          Copy-Item -Recurse -Force dashboard\dist\* dist\OpenShorts\app\dashboard\dist\
+          New-Item -ItemType Directory -Force dist\VexxoClip\app\dashboard\dist | Out-Null
+          Copy-Item -Recurse -Force dashboard\dist\* dist\VexxoClip\app\dashboard\dist\
           exit 0
 
       - name: Embedded Python + dependencies
         shell: pwsh
         run: |
-          $py = "dist\OpenShorts\python"
+          $py = "dist\VexxoClip\python"
           New-Item -ItemType Directory -Force $py | Out-Null
           Invoke-WebRequest https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip -OutFile py.zip
           Expand-Archive py.zip $py
@@ -51,20 +51,25 @@ jobs:
           # CPU torch first (the default wheel drags in GBs of CUDA), then the rest.
           & "$py\python.exe" -m pip install --no-warn-script-location --index-url https://download.pytorch.org/whl/cpu torch==2.11.0 torchvision==0.26.0
           & "$py\python.exe" -m pip install --no-warn-script-location -r requirements.txt
+          # Native app window (WebView2). proxy_tools is source-only, so it needs setuptools to build.
+          & "$py\python.exe" -m pip install --no-warn-script-location setuptools wheel
+          & "$py\python.exe" -m pip install --no-warn-script-location pywebview==6.2.1
+          # App icon for the installer, shortcuts and window (drawn, not stored in git).
+          & "$py\python.exe" "dist\VexxoClip\app\desktop\make_icon.py"
 
       - name: Bundle FFmpeg
         shell: pwsh
         run: |
           Invoke-WebRequest https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip -OutFile ffmpeg.zip
           Expand-Archive ffmpeg.zip ffmpeg-tmp
-          New-Item -ItemType Directory -Force dist\OpenShorts\ffmpeg | Out-Null
+          New-Item -ItemType Directory -Force dist\VexxoClip\ffmpeg | Out-Null
           # ffmpeg + ffprobe only: ffplay (a video player) is a third of the size and never used.
-          Copy-Item ffmpeg-tmp\*\bin\ffmpeg.exe, ffmpeg-tmp\*\bin\ffprobe.exe dist\OpenShorts\ffmpeg\
+          Copy-Item ffmpeg-tmp\*\bin\ffmpeg.exe, ffmpeg-tmp\*\bin\ffprobe.exe dist\VexxoClip\ffmpeg\
 
       - name: Trim files the app never loads
         shell: pwsh
         run: |
-          $sp = "dist\OpenShorts\python\Lib\site-packages"
+          $sp = "dist\VexxoClip\python\Lib\site-packages"
           # C++ headers and linker stubs: only needed to compile against torch.
           Remove-Item -Recurse -Force "$sp\torch\include" -ErrorAction SilentlyContinue
           Get-ChildItem "$sp\torch\lib" -Filter *.lib -ErrorAction SilentlyContinue | Remove-Item -Force
@@ -72,9 +77,12 @@ jobs:
       - name: Smoke test (backend imports and starts)
         shell: pwsh
         run: |
-          $env:PATH = "$PWD\dist\OpenShorts\ffmpeg;$env:PATH"
-          Set-Location dist\OpenShorts\app
+          $env:PATH = "$PWD\dist\VexxoClip\ffmpeg;$env:PATH"
+          Set-Location dist\VexxoClip\app
           & ..\python\python.exe -c "import app; import torch, cv2; print('app imported OK')"
+          # pywebview is optional at runtime (the launcher falls back to an Edge/Chrome app window): warn, don't fail.
+          & ..\python\python.exe -c "import webview; print('pywebview imported OK')"
+          if ($LASTEXITCODE -ne 0) { Write-Warning "pywebview did not import; the app will use the Edge/Chrome window fallback"; $global:LASTEXITCODE = 0 }
           # compiled caches the smoke test just wrote: Python rebuilds them on first run
           Get-ChildItem .. -Recurse -Directory -Filter __pycache__ | Remove-Item -Recurse -Force
 
@@ -82,9 +90,9 @@ jobs:
         shell: pwsh
         run: |
           choco install innosetup -y --no-progress
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" desktop\openshorts.iss
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" desktop\vexxo.iss
 
       - uses: actions/upload-artifact@v4
         with:
-          name: OpenShorts-Studio-Setup
-          path: installer\OpenShorts-Studio-Setup.exe
+          name: Vexxo-Clip-Setup
+          path: installer\Vexxo-Clip-Setup.exe

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Vexxo Clip</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { height: 100%; margin: 0; background: #0b0d14; color: #e9ebf2;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif; }
+  body { display: flex; align-items: center; justify-content: center;
+    background-image: radial-gradient(900px 480px at 12% -8%, rgba(124,108,255,.16), transparent 62%); }
+  .box { text-align: center; }
+  .logo { width: 84px; height: 84px; margin: 0 auto 22px; }
+  h1 { font-size: 28px; font-weight: 600; letter-spacing: -.02em; margin: 0 0 8px; }
+  p { margin: 0; color: #8d93a6; font-size: 14px; }
+  .bar { width: 220px; height: 3px; border-radius: 3px; background: #1c2030; margin: 26px auto 0; overflow: hidden; }
+  .bar i { display: block; width: 40%; height: 100%; border-radius: 3px;
+    background: linear-gradient(90deg, #8b7cff, #3b82f6); animation: slide 1.3s ease-in-out infinite; }
+  @keyframes slide { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+  .err { color: #f4767f; display: none; margin-top: 18px; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="box">
+  <svg class="logo" viewBox="0 0 32 32" fill="none">
+    <defs><linearGradient id="g" x1="3" y1="2" x2="29" y2="30" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#9A8CFF"/><stop offset="1" stop-color="#3B82F6"/></linearGradient></defs>
+    <rect width="32" height="32" rx="9" fill="url(#g)"/>
+    <path d="M8.5 9.5 14.6 22.3" stroke="#fff" stroke-width="3.4" stroke-linecap="round"/>
+    <path d="M17.4 22.3 23.5 9.5" stroke="#fff" stroke-opacity=".72" stroke-width="3.4" stroke-linecap="round"/>
+  </svg>
+  <h1>Vexxo Clip</h1>
+  <p id="msg">Starting up… the first launch takes a little longer.</p>
+  <div class="bar"><i></i></div>
+  <p class="err" id="err">This is taking longer than expected. Close the window and open Vexxo Clip again.
+  If it keeps happening, check vexxo.log in the install folder.</p>
+</div>
+<script>
+  // The local server needs a few seconds to load its models. A no-cors request
+  // succeeds (opaque) once it answers and fails while nothing is listening.
+  var ROOT = "http://127.0.0.1:8000/", APP = ROOT + "#app", started = Date.now();
+  function tick() {
+    fetch(ROOT, { mode: "no-cors", cache: "no-store" }).then(function () {
+      location.replace(APP);
+    }).catch(function () {
+      if (Date.now() - started > 180000) document.getElementById("err").style.display = "block";
+      setTimeout(tick, 700);
+    });
+  }
+  tick();
+</script>
+</body>
+</html>
