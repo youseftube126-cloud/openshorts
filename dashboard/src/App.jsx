@@ -30,6 +30,8 @@ import AutopilotTab from './components/AutopilotTab';
 import ProfileMenu from './components/ProfileMenu';
 import Modal from './components/ui/Modal';
 import { useAuth } from './contexts/AuthContext';
+import FormatSelector from './components/FormatSelector';
+import CampaignWizard from './components/CampaignWizard';
 
 // Vexxo Clip logo mark: gradient tile with a split "V".
 function VexxoMark({ size = 32 }) {
@@ -316,6 +318,8 @@ function App() {
   const [durableClips, setDurableClips] = useState({});
 
   const [apiKey, setApiKey] = useState(localStorage.getItem('gemini_key') || '');
+  const [formatId, setFormatId] = useState('podcast_vertical');
+  const [campaignData, setCampaignData] = useState(null);
   // The campaign new clips are added to (set from the Campaigns tab).
   const [activeCampaignId, setActiveCampaignIdRaw] = useState(localStorage.getItem('active_campaign') || '');
   const setActiveCampaignId = (id) => {
@@ -1199,6 +1203,7 @@ function App() {
       // Advanced generation controls: only sent when the user set them, so the
       // default request stays byte-identical to the pre-feature one.
       const advanced = {
+        format_id: formatId,
         target_clips: data.targetClips || null,
         clip_min_seconds: data.clipMinSeconds || null,
         clip_max_seconds: data.clipMaxSeconds || null,
@@ -2130,6 +2135,10 @@ function App() {
                 </div>
 
                 <MediaInput onProcess={handleProcess} isProcessing={status === 'processing'} />
+                <div className="mt-6 max-w-xl mx-auto w-full">
+                  <FormatSelector selected={formatId} onSelect={setFormatId} />
+                  <CampaignWizard onAnalyze={(data) => setCampaignData(data)} />
+                </div>
 
                 <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-8 text-muted text-xs sm:text-sm">
                   <span className="flex items-center gap-2"><Youtube size={16} /> YouTube</span>
