@@ -30,6 +30,8 @@ import AutopilotTab from './components/AutopilotTab';
 import ProfileMenu from './components/ProfileMenu';
 import Modal from './components/ui/Modal';
 import { useAuth } from './contexts/AuthContext';
+import AIObserverChat from './components/AIObserverChat';
+import AIFormatStudio from './components/AIFormatStudio';
 import FormatSelector from './components/FormatSelector';
 import CampaignWizard from './components/CampaignWizard';
 
@@ -2135,6 +2137,8 @@ function App() {
                 </div>
 
                 <MediaInput onProcess={handleProcess} isProcessing={status === 'processing'} />
+                <AIObserverChat logs={logs} transcript={results?.transcript} />
+                <AIFormatStudio />
                 <div className="mt-6 max-w-xl mx-auto w-full">
                   <FormatSelector selected={formatId} onSelect={setFormatId} />
                   <CampaignWizard onAnalyze={(data) => setCampaignData(data)} />
