@@ -1,14 +1,14 @@
 import os
 import json
-import google.generativeai as genai
 from datetime import datetime, timezone, timedelta
+from google import genai
 
 def analyze_campaign(transcript_text, campaign_rules, target_countries):
     api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key: raise ValueError("GEMINI_API_KEY missing")
+    if not api_key: 
+        return {"error": "GEMINI_API_KEY is missing in the environment."}
     
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    client = genai.Client(api_key=api_key)
     
     prompt = f"""
     You are an expert YouTube and TikTok strategist.
@@ -26,15 +26,20 @@ def analyze_campaign(transcript_text, campaign_rules, target_countries):
     """
     
     try:
-        response = model.generate_content(prompt)
-        text = response.text.strip().replace("```json", "").replace("```", "")
+        response = client.models.generate_content(
+            model='gemini-2.0-flash',
+            contents=prompt,
+        )
+        text = response.text.strip().replace('```json', '').replace('```', '')
         data = json.loads(text)
     except Exception as e:
-        data = {"target_audience": "General", "best_titles": ["Check this out"], "best_hashtags": ["#viral"], "best_publish_hour_local": 18}
+        print(f"Gemini Error: {e}")
+        return {"error": str(e)}
     
     local_hour = data.get("best_publish_hour_local", 18)
     utc_now = datetime.now(timezone.utc)
     target_time_utc = utc_now.replace(hour=(local_hour - 2) % 24, minute=0, second=0, microsecond=0)
-    if target_time_utc < utc_now: target_time_utc += timedelta(days=1)
+    if target_time_utc < utc_now: 
+        target_time_utc += timedelta(days=1)
     data["publish_time_utc"] = target_time_utc.isoformat()
     return data
