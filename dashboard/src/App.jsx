@@ -2141,7 +2141,7 @@ function App() {
                 <AIFormatStudio />
                 <div className="mt-6 max-w-xl mx-auto w-full">
                   <FormatSelector selected={formatId} onSelect={setFormatId} />
-                  <CampaignWizard onAnalyze={(data) => setCampaignData(data)} />
+                  <CampaignWizard onAnalyze={(data) => setCampaignData(data)} geminiApiKey={apiKey} />
                 </div>
 
                 <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-8 text-muted text-xs sm:text-sm">
