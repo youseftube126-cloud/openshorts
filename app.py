@@ -1,4 +1,3 @@
-from vexxo_routes import router as vexxo_router
 from render_engine import render_with_format
 from campaign_ai import analyze_campaign
 from scheduler import add_to_schedule, start_scheduler
@@ -8474,10 +8473,3 @@ async def saasshorts_voices(
 # --- Desktop (no-Docker) build ------------------------------------------------
 # The Windows installer ships the built dashboard and serves it from this same
 # process (the dashboard talks to a relative /api, so no nginx is needed).
-# Mounted LAST so every API route and the /videos, /thumbnails mounts above win.
-_DASHBOARD_DIR = os.environ.get("OPENSHORTS_DASHBOARD_DIR")
-if _DASHBOARD_DIR and os.path.isdir(_DASHBOARD_DIR):
-    app.mount("/", StaticFiles(directory=_DASHBOARD_DIR, html=True), name="dashboard")
-
-
-app.include_router(vexxo_router)
